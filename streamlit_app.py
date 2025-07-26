@@ -1225,14 +1225,30 @@ elif pages[selected_page] == "regression_detector":
                 fig = px.line(query_perf, x='timestamp', y='response_time',
                              title=f"Performance History: {selected_query}")
                 
-                # Add regression detection point - fix the date handling
+                # Add regression detection point using add_shape instead of add_vline
                 regression_point = len(query_dates) * 0.7
                 regression_date = query_dates[int(regression_point)]
                 
-                # Convert to string to avoid Plotly date arithmetic issues
-                fig.add_vline(x=regression_date.strftime('%Y-%m-%d %H:%M:%S'), 
-                             line_dash="dash", line_color="red",
-                             annotation_text="Regression Detected")
+                # Use add_shape which is more reliable with datetime data
+                fig.add_shape(
+                    type="line",
+                    x0=regression_date, x1=regression_date,
+                    y0=0, y1=1,
+                    yref="paper",
+                    line=dict(color="red", width=2, dash="dash"),
+                )
+                
+                # Add annotation separately
+                fig.add_annotation(
+                    x=regression_date,
+                    y=max(query_perf['response_time']) * 0.9,
+                    text="Regression Detected",
+                    showarrow=True,
+                    arrowhead=2,
+                    arrowcolor="red",
+                    bgcolor="white",
+                    bordercolor="red"
+                )
                 
                 st.plotly_chart(fig, use_container_width=True)
                 
