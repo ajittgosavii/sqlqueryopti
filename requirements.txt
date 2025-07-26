@@ -6,6 +6,9 @@ numpy>=1.24.0
 # Visualization
 plotly>=5.15.0
 
+# AI Integration - Claude
+anthropic>=0.8.0
+
 # Additional useful packages for SQL optimization app
 sqlparse>=0.4.4
 sqlalchemy>=2.0.0

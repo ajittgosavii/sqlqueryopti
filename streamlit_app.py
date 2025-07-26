@@ -6,6 +6,238 @@ from datetime import datetime, timedelta
 import random
 import time
 import re
+import json
+import asyncio
+import os
+
+# Claude AI Integration
+try:
+    import anthropic
+    ANTHROPIC_AVAILABLE = True
+except ImportError:
+    ANTHROPIC_AVAILABLE = False
+    st.error("⚠️ Anthropic library not installed. Install with: pip install anthropic")
+
+# Initialize Claude client
+@st.cache_resource
+def get_claude_client():
+    """Initialize Claude client with API key"""
+    if not ANTHROPIC_AVAILABLE:
+        return None
+    
+    # Try to get API key from Streamlit secrets first, then environment
+    api_key = None
+    
+    try:
+        # Streamlit Cloud secrets
+        api_key = st.secrets["ANTHROPIC_API_KEY"]
+    except:
+        try:
+            # Environment variable
+            api_key = os.getenv("ANTHROPIC_API_KEY")
+        except:
+            pass
+    
+    if not api_key:
+        st.warning("🔑 Claude API key not found. Please add ANTHROPIC_API_KEY to your secrets or environment variables.")
+        return None
+    
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+        return client
+    except Exception as e:
+        st.error(f"❌ Failed to initialize Claude client: {str(e)}")
+        return None
+
+# AI-powered functions
+def call_claude_api(client, prompt, max_tokens=2000):
+    """Call Claude API with error handling"""
+    if not client:
+        return "❌ Claude AI not available. Using fallback response."
+    
+    try:
+        response = client.messages.create(
+            model="claude-3-sonnet-20240229",
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return response.content[0].text
+    except Exception as e:
+        st.error(f"❌ Claude API Error: {str(e)}")
+        return f"❌ API Error: {str(e)}"
+
+def ai_natural_language_to_sql(client, nl_query, schema_info):
+    """Convert natural language to SQL using Claude"""
+    prompt = f"""You are an expert SQL developer. Convert this natural language query to optimized SQL.
+
+DATABASE SCHEMA:
+{schema_info}
+
+NATURAL LANGUAGE QUERY:
+{nl_query}
+
+Please provide:
+1. An optimized SQL query
+2. Brief explanation of the optimization choices
+3. Any assumptions made about the data
+
+Format your response as:
+**SQL Query:**
+```sql
+[Your SQL here]
+```
+
+**Explanation:**
+[Your explanation here]
+
+**Optimizations Applied:**
+- [Optimization 1]
+- [Optimization 2]
+- etc.
+"""
+    
+    return call_claude_api(client, prompt, max_tokens=1500)
+
+def ai_analyze_query_performance(client, sql_query):
+    """Analyze SQL query performance using Claude"""
+    prompt = f"""You are a database performance expert. Analyze this SQL query for performance issues and optimization opportunities.
+
+SQL QUERY:
+```sql
+{sql_query}
+```
+
+Please provide:
+1. **Performance Issues Identified:**
+   - List specific bottlenecks
+   - Explain why each is problematic
+
+2. **Optimization Recommendations:**
+   - Specific improvements with expected impact
+   - Index recommendations
+   - Query rewrite suggestions
+
+3. **Optimized Version:**
+   - Provide an improved version of the query
+   - Explain the changes made
+
+4. **Expected Performance Improvement:**
+   - Estimate percentage improvement
+   - Key metrics that will improve
+
+Format your response clearly with sections and bullet points.
+"""
+    
+    return call_claude_api(client, prompt, max_tokens=2500)
+
+def ai_explain_execution_plan(client, execution_plan, database_engine="PostgreSQL"):
+    """Explain execution plan using Claude"""
+    prompt = f"""You are a database expert. Explain this {database_engine} execution plan in plain English that a developer can understand.
+
+EXECUTION PLAN:
+{execution_plan}
+
+Please provide:
+1. **Overall Strategy:** High-level description of what the database is doing
+
+2. **Step-by-Step Breakdown:**
+   - Explain each operation in the plan
+   - Identify the sequence of operations
+   - Highlight cost and performance implications
+
+3. **Performance Analysis:**
+   - Identify expensive operations
+   - Point out potential bottlenecks
+   - Explain cost estimates
+
+4. **Optimization Suggestions:**
+   - What indexes might help
+   - Alternative query approaches
+   - Configuration improvements
+
+Make the explanation accessible to developers who aren't database experts.
+"""
+    
+    return call_claude_api(client, prompt, max_tokens=2000)
+
+def ai_review_sql_code(client, sql_code, code_type="Query"):
+    """Review SQL code using Claude"""
+    prompt = f"""You are a senior database developer reviewing this {code_type} for code quality, security, and performance.
+
+SQL CODE:
+```sql
+{sql_code}
+```
+
+Please provide a comprehensive review covering:
+
+1. **🚨 CRITICAL ISSUES:**
+   - Security vulnerabilities (SQL injection, etc.)
+   - Major performance problems
+   - Data integrity risks
+
+2. **⚠️ WARNINGS:**
+   - Performance concerns
+   - Maintainability issues
+   - Best practice violations
+
+3. **💡 SUGGESTIONS:**
+   - Code improvements
+   - Optimization opportunities
+   - Style and readability
+
+4. **✨ IMPROVED VERSION:**
+   - Provide a corrected/optimized version
+   - Explain the key changes made
+
+5. **📊 QUALITY SCORE:**
+   - Overall rating (1-10)
+   - Breakdown by category (Security, Performance, Maintainability)
+
+Be specific about issues and provide actionable recommendations.
+"""
+    
+    return call_claude_api(client, prompt, max_tokens=3000)
+
+def ai_generate_index_recommendations(client, queries_list, current_indexes=""):
+    """Generate index recommendations using Claude"""
+    prompt = f"""You are a database optimization expert. Analyze these SQL queries and provide index recommendations.
+
+CURRENT INDEXES:
+{current_indexes if current_indexes else "None provided"}
+
+QUERY WORKLOAD:
+{chr(10).join([f"Query {i+1}: {query}" for i, query in enumerate(queries_list)])}
+
+Please provide:
+
+1. **📊 WORKLOAD ANALYSIS:**
+   - Common patterns in the queries
+   - Frequently accessed columns
+   - Join patterns and WHERE clause analysis
+
+2. **📈 HIGH PRIORITY INDEXES:**
+   - Most impactful indexes to create
+   - Expected performance improvement
+   - Rationale for each recommendation
+
+3. **📋 MEDIUM PRIORITY INDEXES:**
+   - Additional beneficial indexes
+   - Situational improvements
+
+4. **🗑️ INDEXES TO CONSIDER REMOVING:**
+   - Unused or redundant indexes
+   - Maintenance overhead reduction
+
+5. **📝 IMPLEMENTATION SCRIPT:**
+   ```sql
+   -- Provide CREATE INDEX statements
+   ```
+
+Focus on indexes that will have the biggest impact on query performance.
+"""
+    
+    return call_claude_api(client, prompt, max_tokens=2500)
 
 # Configure page
 st.set_page_config(
@@ -14,6 +246,34 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Initialize Claude client
+claude_client = get_claude_client()
+
+# Display AI status
+if claude_client:
+    st.sidebar.success("🤖 Claude AI: Connected")
+else:
+    st.sidebar.warning("⚠️ Claude AI: Not Available")
+    st.sidebar.markdown("Add your API key to enable AI features")
+    
+    with st.sidebar.expander("🔑 How to add API key"):
+        st.markdown("""
+        **For Streamlit Cloud:**
+        1. Go to your app settings
+        2. Add a secret: `ANTHROPIC_API_KEY`
+        3. Paste your Claude API key
+        
+        **For local development:**
+        1. Set environment variable:
+        ```bash
+        export ANTHROPIC_API_KEY="your-key-here"
+        ```
+        
+        **Get your API key:**
+        1. Visit [console.anthropic.com](https://console.anthropic.com)
+        2. Create an account and get your API key
+        """)
 
 # Custom CSS
 st.markdown("""
@@ -207,12 +467,26 @@ elif pages[selected_page] == "nl_to_sql":
         
         if st.button("🔄 Convert to SQL", type="primary"):
             if nl_query:
-                with st.spinner("Converting to SQL..."):
-                    time.sleep(1)  # Simulate processing
+                with st.spinner("🤖 Claude is analyzing your request and generating optimized SQL..."):
                     
-                    # Mock SQL generation based on keywords
-                    if "top" in nl_query.lower() and "customer" in nl_query.lower():
-                        sql_query = """-- Generated SQL Query
+                    # Prepare schema information
+                    schema_context = f"Database Schema: {selected_schema}\n"
+                    for table, columns in schemas[selected_schema].items():
+                        schema_context += f"\nTable: {table}\nColumns: {', '.join(columns)}\n"
+                    
+                    # Get AI-generated response
+                    if claude_client:
+                        ai_response = ai_natural_language_to_sql(claude_client, nl_query, schema_context)
+                        
+                        st.markdown("### 🤖 Claude's Analysis")
+                        st.markdown(ai_response)
+                        
+                    else:
+                        # Fallback mock response when Claude is not available
+                        st.warning("⚠️ Claude AI not available. Showing sample response.")
+                        
+                        if "top" in nl_query.lower() and "customer" in nl_query.lower():
+                            sql_query = """-- Generated SQL Query (Mock Response)
 SELECT 
     u.username,
     u.email,
@@ -225,30 +499,30 @@ WHERE o.order_date >= CURRENT_DATE - INTERVAL '30 days'
 GROUP BY u.user_id, u.username, u.email
 ORDER BY total_spent DESC
 LIMIT 5;"""
-                    else:
-                        sql_query = """-- Generated SQL Query
+                        else:
+                            sql_query = """-- Generated SQL Query (Mock Response)
 SELECT *
 FROM users u
 JOIN orders o ON u.user_id = o.user_id
 WHERE o.order_date >= CURRENT_DATE - INTERVAL '30 days'
 ORDER BY o.order_date DESC;"""
-                    
-                    st.markdown("### Generated SQL Query")
-                    st.code(sql_query, language="sql")
-                    
-                    # Optimization suggestions
-                    st.markdown("### 🚀 Optimization Suggestions")
-                    st.markdown("""
-                    <div class="success-card">
-                        <h4>✅ Query Optimizations Applied:</h4>
-                        <ul>
-                            <li>Added proper indexes hint for user_id and order_date</li>
-                            <li>Used efficient JOIN strategy</li>
-                            <li>Limited result set with TOP clause</li>
-                            <li>Added appropriate WHERE clause filtering</li>
-                        </ul>
-                    </div>
-                    """, unsafe_allow_html=True)
+                        
+                        st.markdown("### Generated SQL Query")
+                        st.code(sql_query, language="sql")
+                        
+                        # Mock optimization suggestions
+                        st.markdown("### 🚀 Optimization Suggestions")
+                        st.markdown("""
+                        <div class="success-card">
+                            <h4>✅ Query Optimizations Applied:</h4>
+                            <ul>
+                                <li>Added proper indexes hint for user_id and order_date</li>
+                                <li>Used efficient JOIN strategy</li>
+                                <li>Limited result set with TOP clause</li>
+                                <li>Added appropriate WHERE clause filtering</li>
+                            </ul>
+                        </div>
+                        """, unsafe_allow_html=True)
 
 elif pages[selected_page] == "performance_analyzer":
     st.title("⚡ Query Performance Analyzer")
@@ -272,46 +546,69 @@ ORDER BY o.order_date DESC;""",
         )
         
         if st.button("🔍 Analyze Performance", type="primary"):
-            with st.spinner("Analyzing query performance..."):
-                time.sleep(2)
+            with st.spinner("🤖 Claude is analyzing query performance..."):
                 
-                # Mock performance metrics
-                st.markdown("### 📊 Performance Analysis Results")
-                
-                col_a, col_b, col_c, col_d = st.columns(4)
-                with col_a:
-                    st.metric("Execution Time", "2.3s", "-65%")
-                with col_b:
-                    st.metric("Rows Scanned", "1.2M", "+23%")
-                with col_c:
-                    st.metric("CPU Usage", "78%", "+12%")
-                with col_d:
-                    st.metric("I/O Operations", "15,234", "-45%")
-                
-                # Issues identified
-                st.markdown("### ⚠️ Issues Identified")
-                st.markdown("""
-                <div class="warning-card">
-                    <h4>🐌 Performance Bottlenecks:</h4>
-                    <ul>
-                        <li><strong>Missing Index:</strong> No index on products.category_id causing full table scan</li>
-                        <li><strong>Inefficient JOIN:</strong> order_items table join could be optimized</li>
-                        <li><strong>Large Date Range:</strong> Full year scan on orders table</li>
-                    </ul>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # Optimization recommendations
-                st.markdown("### 🚀 Optimization Recommendations")
-                
-                st.markdown("**1. Add Missing Indexes:**")
-                st.code("""
+                if claude_client:
+                    # Get AI-powered analysis
+                    ai_analysis = ai_analyze_query_performance(claude_client, query_input)
+                    
+                    st.markdown("### 🤖 Claude's Performance Analysis")
+                    st.markdown(ai_analysis)
+                    
+                    # Still show the mock metrics for demonstration
+                    st.markdown("### 📊 Performance Metrics (Simulated)")
+                    col_a, col_b, col_c, col_d = st.columns(4)
+                    with col_a:
+                        st.metric("Execution Time", "2.3s", "-65%")
+                    with col_b:
+                        st.metric("Rows Scanned", "1.2M", "+23%")
+                    with col_c:
+                        st.metric("CPU Usage", "78%", "+12%")
+                    with col_d:
+                        st.metric("I/O Operations", "15,234", "-45%")
+                    
+                else:
+                    # Fallback mock response
+                    st.warning("⚠️ Claude AI not available. Showing sample analysis.")
+                    time.sleep(2)
+                    
+                    # Mock performance metrics
+                    st.markdown("### 📊 Performance Analysis Results")
+                    
+                    col_a, col_b, col_c, col_d = st.columns(4)
+                    with col_a:
+                        st.metric("Execution Time", "2.3s", "-65%")
+                    with col_b:
+                        st.metric("Rows Scanned", "1.2M", "+23%")
+                    with col_c:
+                        st.metric("CPU Usage", "78%", "+12%")
+                    with col_d:
+                        st.metric("I/O Operations", "15,234", "-45%")
+                    
+                    # Issues identified
+                    st.markdown("### ⚠️ Issues Identified")
+                    st.markdown("""
+                    <div class="warning-card">
+                        <h4>🐌 Performance Bottlenecks:</h4>
+                        <ul>
+                            <li><strong>Missing Index:</strong> No index on products.category_id causing full table scan</li>
+                            <li><strong>Inefficient JOIN:</strong> order_items table join could be optimized</li>
+                            <li><strong>Large Date Range:</strong> Full year scan on orders table</li>
+                        </ul>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Optimization recommendations
+                    st.markdown("### 🚀 Optimization Recommendations")
+                    
+                    st.markdown("**1. Add Missing Indexes:**")
+                    st.code("""
 CREATE INDEX idx_products_category_id ON products(category_id);
 CREATE INDEX idx_orders_date_user ON orders(order_date, user_id);
-                """, language="sql")
-                
-                st.markdown("**2. Optimized Query:**")
-                st.code("""
+                    """, language="sql")
+                    
+                    st.markdown("**2. Optimized Query:**")
+                    st.code("""
 -- Optimized version with better JOIN order and filtering
 SELECT /*+ USE_INDEX(p, idx_products_category_id) */ 
        o.order_id, u.username, p.name, oi.quantity
@@ -322,9 +619,9 @@ JOIN users u ON o.user_id = u.user_id
 WHERE p.category_id = 5
   AND o.order_date BETWEEN '2024-01-01' AND '2024-12-31'
 ORDER BY o.order_date DESC;
-                """, language="sql")
-                
-                st.markdown("**Expected Performance Improvement: 65% faster execution**")
+                    """, language="sql")
+                    
+                    st.markdown("**Expected Performance Improvement: 65% faster execution**")
     
     with col2:
         st.subheader("Quick Stats")
@@ -460,6 +757,42 @@ SELECT
 FROM pg_stat_user_indexes 
 WHERE indexname IN ('idx_products_category_price', 'idx_orders_status_date');
             """, language="sql")
+        
+        # Add AI-powered index recommendations
+        st.markdown("---")
+        st.subheader("🤖 AI-Powered Index Analysis")
+        
+        sample_queries = st.text_area(
+            "Paste your query workload here (one query per line):",
+            placeholder="""SELECT * FROM orders WHERE user_id = ? AND status = 'pending'
+SELECT * FROM products WHERE category_id = ? AND price BETWEEN ? AND ?
+SELECT * FROM users WHERE email = ?""",
+            height=100
+        )
+        
+        current_indexes_input = st.text_area(
+            "Current indexes (optional):",
+            placeholder="idx_users_email, idx_orders_date, idx_products_name",
+            height=60
+        )
+        
+        if st.button("🤖 Get AI Index Recommendations", type="primary"):
+            if sample_queries.strip():
+                with st.spinner("🤖 Claude is analyzing your query workload..."):
+                    if claude_client:
+                        queries_list = [q.strip() for q in sample_queries.split('\n') if q.strip()]
+                        ai_recommendations = ai_generate_index_recommendations(
+                            claude_client, 
+                            queries_list, 
+                            current_indexes_input
+                        )
+                        
+                        st.markdown("### 🤖 Claude's Index Recommendations")
+                        st.markdown(ai_recommendations)
+                    else:
+                        st.warning("⚠️ Claude AI not available. Please add your API key to use this feature.")
+            else:
+                st.error("Please provide sample queries for analysis.")
     
     with tab3:
         st.subheader("📈 Impact Analysis & Monitoring")
@@ -521,38 +854,49 @@ Hash Join  (cost=5.18..10.25 rows=2 width=100)
         db_engine = st.selectbox("Database Engine", ["PostgreSQL", "MySQL", "SQL Server", "Oracle"])
         
         if st.button("🔍 Explain Plan", type="primary"):
-            with st.spinner("Analyzing execution plan..."):
-                time.sleep(1.5)
+            with st.spinner("🤖 Claude is analyzing the execution plan..."):
                 
-                st.markdown("### 🧠 AI-Generated Explanation")
-                
-                explanation = """
-                **Overall Strategy:** This query uses a combination of index scans and hash joins to retrieve data efficiently.
-                
-                **Step-by-Step Breakdown:**
-                
-                1. **Index Scan on Orders** (Cost: 0.57-4.59)
-                   - The database starts by looking up orders for user_id 12345 using the `idx_orders_user` index
-                   - This is very efficient as it directly targets the specific user
-                   - Additional filtering on order_date happens after the index lookup
-                
-                2. **Nested Loop with Products** (Cost: 1.15-8.17)
-                   - For each order found, the database looks up product details
-                   - Uses `idx_products_id` index for efficient product lookups
-                   - Nested loops are efficient here due to the small result set from step 1
-                
-                3. **Hash Join with Order Items** (Cost: 5.18-10.25)
-                   - The database creates a hash table from the orders result set
-                   - Performs a sequential scan on order_items (concerning for large tables)
-                   - Joins order_items with the hashed orders using order_id
-                
-                **Performance Characteristics:**
-                - **Good:** Efficient use of indexes for initial lookups
-                - **Concerning:** Sequential scan on order_items table
-                - **Overall Cost:** ~10.25 units (moderate for this data size)
-                """
-                
-                st.markdown(explanation)
+                if claude_client:
+                    # Get AI-powered explanation
+                    ai_explanation = ai_explain_execution_plan(claude_client, plan_input, db_engine)
+                    
+                    st.markdown("### 🤖 Claude's Execution Plan Analysis")
+                    st.markdown(ai_explanation)
+                    
+                else:
+                    # Fallback mock response
+                    st.warning("⚠️ Claude AI not available. Showing sample explanation.")
+                    time.sleep(1.5)
+                    
+                    st.markdown("### 🧠 AI-Generated Explanation")
+                    
+                    explanation = """
+                    **Overall Strategy:** This query uses a combination of index scans and hash joins to retrieve data efficiently.
+                    
+                    **Step-by-Step Breakdown:**
+                    
+                    1. **Index Scan on Orders** (Cost: 0.57-4.59)
+                       - The database starts by looking up orders for user_id 12345 using the `idx_orders_user` index
+                       - This is very efficient as it directly targets the specific user
+                       - Additional filtering on order_date happens after the index lookup
+                    
+                    2. **Nested Loop with Products** (Cost: 1.15-8.17)
+                       - For each order found, the database looks up product details
+                       - Uses `idx_products_id` index for efficient product lookups
+                       - Nested loops are efficient here due to the small result set from step 1
+                    
+                    3. **Hash Join with Order Items** (Cost: 5.18-10.25)
+                       - The database creates a hash table from the orders result set
+                       - Performs a sequential scan on order_items (concerning for large tables)
+                       - Joins order_items with the hashed orders using order_id
+                    
+                    **Performance Characteristics:**
+                    - **Good:** Efficient use of indexes for initial lookups
+                    - **Concerning:** Sequential scan on order_items table
+                    - **Overall Cost:** ~10.25 units (moderate for this data size)
+                    """
+                    
+                    st.markdown(explanation)
     
     with col2:
         if 'plan_input' in locals() and plan_input:
@@ -635,76 +979,87 @@ END""",
         review_level = st.selectbox("Review Level", ["Basic", "Comprehensive", "Security Focused"])
         
         if st.button("🔍 Review Code", type="primary"):
-            with st.spinner("Analyzing SQL code..."):
-                time.sleep(2)
+            with st.spinner("🤖 Claude is reviewing your SQL code..."):
                 
-                st.markdown("### 📋 Code Review Results")
-                
-                # Severity levels
-                critical_issues = []
-                warnings = []
-                suggestions = []
-                
-                if "sp_executesql" in sql_code and "CAST" in sql_code:
-                    critical_issues.append({
-                        "type": "SQL Injection Vulnerability",
-                        "line": 4,
-                        "description": "Dynamic SQL construction with string concatenation is vulnerable to SQL injection",
-                        "fix": "Use parameterized queries instead"
+                if claude_client:
+                    # Get AI-powered code review
+                    ai_review = ai_review_sql_code(claude_client, sql_code, code_type)
+                    
+                    st.markdown("### 🤖 Claude's Code Review")
+                    st.markdown(ai_review)
+                    
+                else:
+                    # Fallback mock response
+                    st.warning("⚠️ Claude AI not available. Showing sample review.")
+                    time.sleep(2)
+                    
+                    st.markdown("### 📋 Code Review Results")
+                    
+                    # Severity levels
+                    critical_issues = []
+                    warnings = []
+                    suggestions = []
+                    
+                    if "sp_executesql" in sql_code and "CAST" in sql_code:
+                        critical_issues.append({
+                            "type": "SQL Injection Vulnerability",
+                            "line": 4,
+                            "description": "Dynamic SQL construction with string concatenation is vulnerable to SQL injection",
+                            "fix": "Use parameterized queries instead"
+                        })
+                    
+                    if "SELECT *" in sql_code:
+                        warnings.append({
+                            "type": "Performance Issue", 
+                            "line": 4,
+                            "description": "Using SELECT * can impact performance and maintainability",
+                            "fix": "Specify exact columns needed"
+                        })
+                    
+                    suggestions.append({
+                        "type": "Best Practice",
+                        "line": 0,
+                        "description": "Add error handling and transaction management",
+                        "fix": "Wrap in TRY-CATCH block"
                     })
-                
-                if "SELECT *" in sql_code:
-                    warnings.append({
-                        "type": "Performance Issue", 
-                        "line": 4,
-                        "description": "Using SELECT * can impact performance and maintainability",
-                        "fix": "Specify exact columns needed"
-                    })
-                
-                suggestions.append({
-                    "type": "Best Practice",
-                    "line": 0,
-                    "description": "Add error handling and transaction management",
-                    "fix": "Wrap in TRY-CATCH block"
-                })
-                
-                # Display issues by severity
-                if critical_issues:
-                    st.markdown("#### 🚨 Critical Issues")
-                    for issue in critical_issues:
-                        st.markdown(f"""
-                        <div style="border-left: 4px solid red; padding: 1rem; margin: 0.5rem 0; background: #ffe6e6;">
-                            <h5 style="color: red;">🚨 {issue['type']} (Line {issue['line']})</h5>
-                            <p><strong>Issue:</strong> {issue['description']}</p>
-                            <p><strong>Fix:</strong> {issue['fix']}</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                
-                if warnings:
-                    st.markdown("#### ⚠️ Warnings") 
-                    for warning in warnings:
-                        st.markdown(f"""
-                        <div style="border-left: 4px solid orange; padding: 1rem; margin: 0.5rem 0; background: #fff3cd;">
-                            <h5 style="color: orange;">⚠️ {warning['type']} (Line {warning['line']})</h5>
-                            <p><strong>Issue:</strong> {warning['description']}</p>
-                            <p><strong>Fix:</strong> {warning['fix']}</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                
-                if suggestions:
-                    st.markdown("#### 💡 Suggestions")
-                    for suggestion in suggestions:
-                        st.markdown(f"""
-                        <div style="border-left: 4px solid blue; padding: 1rem; margin: 0.5rem 0; background: #e7f3ff;">
-                            <h5 style="color: blue;">💡 {suggestion['type']}</h5>
-                            <p><strong>Suggestion:</strong> {suggestion['description']}</p>
-                            <p><strong>Implementation:</strong> {suggestion['fix']}</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                
-                # Improved version
-                st.markdown("### ✨ Improved Version")
-                st.code("""
+                    
+                    # Display issues by severity
+                    if critical_issues:
+                        st.markdown("#### 🚨 Critical Issues")
+                        for issue in critical_issues:
+                            st.markdown(f"""
+                            <div style="border-left: 4px solid red; padding: 1rem; margin: 0.5rem 0; background: #ffe6e6;">
+                                <h5 style="color: red;">🚨 {issue['type']} (Line {issue['line']})</h5>
+                                <p><strong>Issue:</strong> {issue['description']}</p>
+                                <p><strong>Fix:</strong> {issue['fix']}</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                    
+                    if warnings:
+                        st.markdown("#### ⚠️ Warnings") 
+                        for warning in warnings:
+                            st.markdown(f"""
+                            <div style="border-left: 4px solid orange; padding: 1rem; margin: 0.5rem 0; background: #fff3cd;">
+                                <h5 style="color: orange;">⚠️ {warning['type']} (Line {warning['line']})</h5>
+                                <p><strong>Issue:</strong> {warning['description']}</p>
+                                <p><strong>Fix:</strong> {warning['fix']}</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                    
+                    if suggestions:
+                        st.markdown("#### 💡 Suggestions")
+                        for suggestion in suggestions:
+                            st.markdown(f"""
+                            <div style="border-left: 4px solid blue; padding: 1rem; margin: 0.5rem 0; background: #e7f3ff;">
+                                <h5 style="color: blue;">💡 {suggestion['type']}</h5>
+                                <p><strong>Suggestion:</strong> {suggestion['description']}</p>
+                                <p><strong>Implementation:</strong> {suggestion['fix']}</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                    
+                    # Improved version
+                    st.markdown("### ✨ Improved Version")
+                    st.code("""
 CREATE PROCEDURE GetCustomerOrders(
     @CustomerId INT,
     @StartDate DATE = NULL
@@ -750,7 +1105,7 @@ BEGIN
         RAISERROR(@ErrorMessage, @ErrorSeverity, @ErrorState);
     END CATCH
 END
-                """, language="sql")
+                    """, language="sql")
     
     with col2:
         st.subheader("📊 Code Quality Score")
