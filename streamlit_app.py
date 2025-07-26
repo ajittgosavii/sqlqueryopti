@@ -1062,16 +1062,16 @@ elif pages[selected_page] == "demo_examples":
         st.markdown("Copy these slow queries and paste them in the **Query Performance Analyzer** tool:")
         
         performance_examples = {
-            "Missing Index (High Impact)": '''SELECT o.order_id, u.username, p.name, oi.quantity
+            "Missing Index (High Impact)": """SELECT o.order_id, u.username, p.name, oi.quantity
 FROM orders o
 JOIN users u ON o.user_id = u.user_id  
 JOIN order_items oi ON o.order_id = oi.order_id
 JOIN products p ON oi.product_id = p.product_id
 WHERE o.order_date BETWEEN '2024-01-01' AND '2024-12-31'
   AND p.category_id = 5
-ORDER BY o.order_date DESC;''',
+ORDER BY o.order_date DESC;""",
             
-            "Poor JOIN Order": '''SELECT c.customer_name, COUNT(o.order_id) as order_count,
+            "Poor JOIN Order": """SELECT c.customer_name, COUNT(o.order_id) as order_count,
        SUM(o.total_amount) as total_spent
 FROM customers c
 LEFT JOIN orders o ON c.customer_id = o.customer_id
@@ -1079,29 +1079,29 @@ LEFT JOIN order_items oi ON o.order_id = oi.order_id
 LEFT JOIN products p ON oi.product_id = p.product_id
 WHERE p.category_id IN (1, 2, 3, 4, 5)
 GROUP BY c.customer_id, c.customer_name
-HAVING COUNT(o.order_id) > 5;''',
+HAVING COUNT(o.order_id) > 5;""",
             
-            "Unnecessary Subqueries": '''SELECT u.username,
+            "Unnecessary Subqueries": """SELECT u.username,
        (SELECT COUNT(*) FROM orders WHERE user_id = u.user_id) as order_count,
        (SELECT AVG(total_amount) FROM orders WHERE user_id = u.user_id) as avg_order,
        (SELECT MAX(order_date) FROM orders WHERE user_id = u.user_id) as last_order
 FROM users u
 WHERE u.created_at > '2024-01-01'
-  AND (SELECT COUNT(*) FROM orders WHERE user_id = u.user_id) > 0;''',
+  AND (SELECT COUNT(*) FROM orders WHERE user_id = u.user_id) > 0;""",
             
-            "Function in WHERE Clause": '''SELECT product_id, name, price
+            "Function in WHERE Clause": """SELECT product_id, name, price
 FROM products 
 WHERE UPPER(name) LIKE '%PHONE%'
   AND YEAR(created_date) = 2024
   AND price > 100
-ORDER BY price DESC;''',
+ORDER BY price DESC;""",
             
-            "N+1 Query Problem": '''-- This represents multiple queries being executed
+            "N+1 Query Problem": """-- This represents multiple queries being executed
 SELECT user_id, username FROM users WHERE status = 'active';
 -- Then for each user:
 SELECT COUNT(*) FROM orders WHERE user_id = 1;
 SELECT COUNT(*) FROM orders WHERE user_id = 2;
--- ... (repeats for each user)'''
+-- ... (repeats for each user)"""
         }
         
         for title, query in performance_examples.items():
@@ -1179,7 +1179,7 @@ SELECT COUNT(*) FROM orders WHERE user_id = 2;
         st.markdown("Copy these execution plans and paste them in the **Query Plan Explainer** tool:")
         
         plan_examples = {
-            "PostgreSQL Nested Loop Plan": '''Nested Loop  (cost=1.15..8.17 rows=1 width=68)
+            "PostgreSQL Nested Loop Plan": """Nested Loop  (cost=1.15..8.17 rows=1 width=68)
   ->  Index Scan using idx_orders_user on orders o  (cost=0.57..4.59 rows=1 width=36)
         Index Cond: (user_id = 12345)
         Filter: ((order_date >= '2024-01-01'::date) AND (order_date <= '2024-12-31'::date))
@@ -1188,23 +1188,23 @@ SELECT COUNT(*) FROM orders WHERE user_id = 2;
 Hash Join  (cost=5.18..10.25 rows=2 width=100)
   Hash Cond: (oi.order_id = o.order_id)
   ->  Seq Scan on order_items oi  (cost=0.00..4.50 rows=150 width=32)
-  ->  Hash  (cost=4.59..4.59 rows=1 width=68)''',
+  ->  Hash  (cost=4.59..4.59 rows=1 width=68)""",
             
-            "SQL Server Plan with Issues": '''SELECT Cost: 100%
+            "SQL Server Plan with Issues": """SELECT Cost: 100%
   |--Compute Scalar(DEFINE:([Expr1004]=CONVERT_IMPLICIT(int,[Expr1005],0)))
        |--Stream Aggregate(GROUP BY:() DEFINE:([Expr1005]=Count(*)))
             |--Hash Match(Inner Join, HASH:([c].[customer_id])=([o].[customer_id]))
                  |--Index Seek(OBJECT:([db].[dbo].[customers].[PK_customers]), SEEK:([c].[customer_id]=[@customer_id]))
-                 |--Clustered Index Scan(OBJECT:([db].[dbo].[orders].[PK_orders]), WHERE:([o].[order_date]>=[@start_date] AND [o].[order_date]<=[@end_date]))''',
+                 |--Clustered Index Scan(OBJECT:([db].[dbo].[orders].[PK_orders]), WHERE:([o].[order_date]>=[@start_date] AND [o].[order_date]<=[@end_date]))""",
             
-            "MySQL EXPLAIN Output": '''+----+-------------+-------+------------+-------+---------------+---------+---------+-------+------+----------+-------------+
+            "MySQL EXPLAIN Output": """+----+-------------+-------+------------+-------+---------------+---------+---------+-------+------+----------+-------------+
 | id | select_type | table | partitions | type  | possible_keys | key     | key_len | ref   | rows | filtered | Extra       |
 +----+-------------+-------+------------+-------+---------------+---------+---------+-------+------+----------+-------------+
 |  1 | SIMPLE      | c     | NULL       | const | PRIMARY       | PRIMARY | 4       | const |    1 |   100.00 | Using index |
 |  1 | SIMPLE      | o     | NULL       | range | idx_date      | idx_date| 3       | NULL  | 5000 |   100.00 | Using where |
-+----+-------------+-------+------------+-------+---------------+---------+---------+-------+------+----------+-------------+''',
++----+-------------+-------+------------+-------+---------------+---------+---------+-------+------+----------+-------------+""",
             
-            "Complex Join Plan": '''Sort  (cost=858.52..861.02 rows=1000 width=68)
+            "Complex Join Plan": """Sort  (cost=858.52..861.02 rows=1000 width=68)
   Sort Key: o.order_date DESC
   ->  Hash Join  (cost=22.50..808.52 rows=1000 width=68)
         Hash Cond: (oi.product_id = p.product_id)
@@ -1216,7 +1216,7 @@ Hash Join  (cost=5.18..10.25 rows=2 width=100)
                           Index Cond: ((order_date >= '2024-01-01'::date) AND (order_date <= '2024-12-31'::date))
         ->  Hash  (cost=4.25..4.25 rows=200 width=36)
               ->  Index Scan using idx_products_category on products p  (cost=0.43..4.25 rows=200 width=36)
-                    Index Cond: (category_id = 5)'''
+                    Index Cond: (category_id = 5)"""
         }
         
         for plan_type, plan_text in plan_examples.items():
@@ -1240,7 +1240,7 @@ Hash Join  (cost=5.18..10.25 rows=2 width=100)
         st.markdown("Copy these problematic code examples and paste them in the **SQL Code Reviewer** tool:")
         
         code_examples = {
-            "Stored Procedure with SQL Injection": '''CREATE PROCEDURE GetCustomerOrders(@CustomerId INT, @StartDate DATE = NULL)
+            "Stored Procedure with SQL Injection": """CREATE PROCEDURE GetCustomerOrders(@CustomerId INT, @StartDate DATE = NULL)
 AS
 BEGIN
     DECLARE @sql NVARCHAR(MAX)
@@ -1253,9 +1253,9 @@ BEGIN
     
     -- Get customer details
     SELECT name, email FROM customers WHERE id = @CustomerId
-END''',
+END""",
             
-            "Function with Performance Issues": '''CREATE FUNCTION CalculateCustomerValue(@CustomerId INT)
+            "Function with Performance Issues": """CREATE FUNCTION CalculateCustomerValue(@CustomerId INT)
 RETURNS MONEY
 AS
 BEGIN
@@ -1275,9 +1275,9 @@ BEGIN
         SET @TotalValue = @TotalValue * 1.1  -- 10% bonus
     
     RETURN ISNULL(@TotalValue, 0)
-END''',
+END""",
             
-            "Problematic View Definition": '''CREATE VIEW CustomerOrderSummary AS
+            "Problematic View Definition": """CREATE VIEW CustomerOrderSummary AS
 SELECT 
     c.customer_id,
     c.customer_name,
@@ -1288,9 +1288,9 @@ SELECT
     -- BAD: Function in SELECT
     dbo.CalculateCustomerValue(c.customer_id) as customer_value
 FROM customers c
-WHERE c.status = 'active' ''',
+WHERE c.status = 'active' """,
             
-            "Trigger with Issues": '''CREATE TRIGGER trg_update_inventory
+            "Trigger with Issues": """CREATE TRIGGER trg_update_inventory
 ON order_items
 AFTER INSERT
 AS
@@ -1315,7 +1315,7 @@ BEGIN
     
     CLOSE item_cursor
     DEALLOCATE item_cursor
-END'''
+END"""
         }
         
         for code_type, code_text in code_examples.items():
